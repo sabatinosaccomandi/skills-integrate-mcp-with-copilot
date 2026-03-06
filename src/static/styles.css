@@ -28,6 +28,37 @@ header h1 {
   margin-bottom: 10px;
 }
 
+#auth-bar {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+#auth-status {
+  font-weight: 700;
+}
+
+#auth-hint {
+  font-size: 14px;
+  opacity: 0.95;
+}
+
+#auth-form {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+#auth-form input {
+  border: 1px solid #c5cae9;
+  border-radius: 4px;
+  padding: 8px 10px;
+  min-width: 170px;
+}
+
 main {
   display: flex;
   flex-wrap: wrap;
@@ -111,18 +142,18 @@ section h3 {
 }
 
 .delete-btn {
-  background: none;
+  background-color: #c62828;
   border: none;
-  color: #c62828;
+  color: #fff;
   cursor: pointer;
-  font-size: 14px;
-  padding: 2px 5px;
+  font-size: 12px;
+  padding: 3px 8px;
   transition: all 0.2s;
   border-radius: 3px;
 }
 
 .delete-btn:hover {
-  background-color: #ffebee;
+  background-color: #b71c1c;
 }
 
 .participants-section p {
@@ -162,6 +193,11 @@ button {
 
 button:hover {
   background-color: #3949ab;
+}
+
+button:disabled {
+  background-color: #9fa8da;
+  cursor: not-allowed;
 }
 
 .message {

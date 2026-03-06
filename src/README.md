@@ -1,11 +1,13 @@
 # Mergington High School Activities API
 
-A super simple FastAPI application that allows students to view and sign up for extracurricular activities.
+A simple FastAPI application for managing extracurricular activities with
+basic authentication and role-based access control.
 
 ## Features
 
 - View all available extracurricular activities
-- Sign up for activities
+- Admin login/logout
+- Admin-only registration and unregistration
 
 ## Getting Started
 
@@ -18,7 +20,7 @@ A super simple FastAPI application that allows students to view and sign up for 
 2. Run the application:
 
    ```
-   python app.py
+   uvicorn app:app --reload
    ```
 
 3. Open your browser and go to:
@@ -30,7 +32,20 @@ A super simple FastAPI application that allows students to view and sign up for 
 | Method | Endpoint                                                          | Description                                                         |
 | ------ | ----------------------------------------------------------------- | ------------------------------------------------------------------- |
 | GET    | `/activities`                                                     | Get all activities with their details and current participant count |
-| POST   | `/activities/{activity_name}/signup?email=student@mergington.edu` | Sign up for an activity                                             |
+| POST   | `/auth/login`                                                     | Login and get a session token                                       |
+| POST   | `/auth/logout`                                                    | Logout using `X-Session-Token` header                              |
+| GET    | `/auth/me`                                                        | Get current session user from `X-Session-Token` header             |
+| POST   | `/activities/{activity_name}/signup?email=student@mergington.edu` | Admin-only sign up for an activity                                  |
+| DELETE | `/activities/{activity_name}/unregister?email=student@mergington.edu` | Admin-only remove a student from an activity                    |
+
+## Default Admin Credentials
+
+For local development, credentials are loaded from `users.json`:
+
+- Username: `teacher1`
+- Password: `admin123`
+
+Passwords are compared using SHA-256 hashes stored in `users.json`.
 
 ## Data Model
 
