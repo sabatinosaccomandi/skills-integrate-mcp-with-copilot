@@ -1,15 +1,15 @@
-"""
-High School Management System API
+"""High School Management System API with basic authentication and RBAC."""
 
-A super simple FastAPI application that allows students to view and sign up
-for extracurricular activities at Mergington High School.
-"""
-
-from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+import hashlib
+import json
 import os
+import secrets
 from pathlib import Path
+
+from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
@@ -18,6 +18,62 @@ app = FastAPI(title="Mergington High School API",
 current_dir = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
           "static")), name="static")
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+def _hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def _load_users() -> dict[str, dict[str, str]]:
+    users_path = current_dir / "users.json"
+    if not users_path.exists():
+        return {}
+
+    with users_path.open("r", encoding="utf-8") as users_file:
+        data = json.load(users_file)
+
+    user_map: dict[str, dict[str, str]] = {}
+    for user in data.get("users", []):
+        username = user.get("username")
+        password_hash = user.get("password_hash")
+        role = user.get("role")
+
+        if not username or not password_hash or not role:
+            continue
+
+        user_map[username] = {
+            "password_hash": password_hash,
+            "role": role,
+        }
+    return user_map
+
+
+users = _load_users()
+# In-memory session token store. This can move to a DB in future iterations.
+sessions: dict[str, dict[str, str]] = {}
+
+
+def _require_authenticated_user(x_session_token: str | None) -> dict[str, str]:
+    if not x_session_token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    session = sessions.get(x_session_token)
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+    return session
+
+
+def _require_admin(x_session_token: str | None) -> dict[str, str]:
+    session = _require_authenticated_user(x_session_token)
+    if session.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    return session
 
 # In-memory activity database
 activities = {
@@ -88,9 +144,51 @@ def get_activities():
     return activities
 
 
+@app.post("/auth/login")
+def login(payload: LoginRequest):
+    username = payload.username.strip()
+    user = users.get(username)
+
+    if not user or user["password_hash"] != _hash_password(payload.password):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    token = secrets.token_urlsafe(32)
+    sessions[token] = {
+        "username": username,
+        "role": user["role"],
+    }
+
+    return {
+        "token": token,
+        "user": {
+            "username": username,
+            "role": user["role"],
+        }
+    }
+
+
+@app.post("/auth/logout")
+def logout(x_session_token: str | None = Header(default=None)):
+    session = _require_authenticated_user(x_session_token)
+    del sessions[x_session_token]
+    return {"message": f"Logged out {session['username']}"}
+
+
+@app.get("/auth/me")
+def auth_me(x_session_token: str | None = Header(default=None)):
+    session = _require_authenticated_user(x_session_token)
+    return {"user": session}
+
+
 @app.post("/activities/{activity_name}/signup")
-def signup_for_activity(activity_name: str, email: str):
-    """Sign up a student for an activity"""
+def signup_for_activity(
+    activity_name: str,
+    email: str,
+    x_session_token: str | None = Header(default=None),
+):
+    """Sign up a student for an activity (admin-only)."""
+    _require_admin(x_session_token)
+
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
@@ -105,14 +203,23 @@ def signup_for_activity(activity_name: str, email: str):
             detail="Student is already signed up"
         )
 
+    if len(activity["participants"]) >= activity["max_participants"]:
+        raise HTTPException(status_code=400, detail="Activity is full")
+
     # Add student
     activity["participants"].append(email)
     return {"message": f"Signed up {email} for {activity_name}"}
 
 
 @app.delete("/activities/{activity_name}/unregister")
-def unregister_from_activity(activity_name: str, email: str):
-    """Unregister a student from an activity"""
+def unregister_from_activity(
+    activity_name: str,
+    email: str,
+    x_session_token: str | None = Header(default=None),
+):
+    """Unregister a student from an activity (admin-only)."""
+    _require_admin(x_session_token)
+
     # Validate activity exists
     if activity_name not in activities:
         raise HTTPException(status_code=404, detail="Activity not found")
